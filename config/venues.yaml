@@ -1,0 +1,21 @@
+Delta Center:
+  capacity: 18306
+  pickup_difficulty: 0.65
+  parking_limitations: 0.7
+  staging: "Consider legal public areas along the downtown hotel/restaurant corridor, outside the arena congestion zone."
+Rice-Eccles Stadium:
+  capacity: 51444
+  pickup_difficulty: 0.85
+  parking_limitations: 0.8
+  staging: "Avoid the stadium traffic perimeter; consider legal commercial areas near, but outside, road closures."
+LaVell Edwards Stadium:
+  capacity: 63470
+  pickup_difficulty: 0.9
+  parking_limitations: 0.75
+  staging: "Wait outside the stadium congestion area and allow traffic to begin clearing before approaching."
+Utah Valley Convention Center:
+  capacity: 5000
+  pickup_difficulty: 0.35
+  parking_limitations: 0.35
+  staging: "Consider the downtown Provo hotel and restaurant corridor using legal waiting areas."
+

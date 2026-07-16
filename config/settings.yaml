@@ -1,0 +1,16 @@
+timezone: America/Denver
+database_path: data/dispatch.db
+cache_dir: data/cache
+report_dir: reports/output
+manual_events_file: data/manual_events.yaml
+maximum_driving_distance_miles: 45
+preferred_driving_days: [Friday, Saturday]
+permitted_start_hour: 5
+permitted_end_hour: 2
+maximum_weekly_hours: 20
+minimum_opportunity_score: 35
+minimum_confidence_score: 25
+minimum_estimated_attendance: 200
+maximum_weather_risk: 80
+report_days_ahead: 7
+

@@ -1,0 +1,16 @@
+- name: Salt Lake City
+  state: UT
+  latitude: 40.7608
+  longitude: -111.8910
+  radius_miles: 35
+- name: Provo-Orem
+  state: UT
+  latitude: 40.2338
+  longitude: -111.6585
+  radius_miles: 30
+- name: Lehi-Draper
+  state: UT
+  latitude: 40.4590
+  longitude: -111.8883
+  radius_miles: 25
+

@@ -1,0 +1,34 @@
+category_weights:
+  concert: 18
+  professional_sports: 17
+  college_sports: 15
+  convention: 14
+  trade_show: 12
+  festival: 11
+  fair: 9
+  theater: 8
+  comedy: 9
+  graduation: 12
+  university_event: 8
+  religious_event: 7
+  parade: 8
+  holiday_celebration: 11
+  nightlife: 10
+  airport_travel: 10
+  other: 5
+day_weights:
+  Friday: 8
+  Saturday: 10
+  Thursday: 5
+  Sunday: 3
+  Monday: 1
+  Tuesday: 1
+  Wednesday: 2
+attendance_breakpoints:
+  - [500, 3]
+  - [1500, 7]
+  - [5000, 13]
+  - [15000, 20]
+  - [40000, 25]
+confidence_fields: [name, venue_name, city, start_datetime, estimated_attendance, event_url]
+

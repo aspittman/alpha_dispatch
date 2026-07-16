@@ -1,0 +1,16 @@
+- name: New Year's Eve
+  month: 12
+  day: 31
+  event_type: holiday_celebration
+  estimated_attendance: null
+- name: Independence Day
+  month: 7
+  day: 4
+  event_type: holiday_celebration
+  estimated_attendance: null
+- name: Pioneer Day
+  month: 7
+  day: 24
+  event_type: holiday_celebration
+  estimated_attendance: null
+
