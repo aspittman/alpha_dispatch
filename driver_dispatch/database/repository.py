@@ -53,7 +53,17 @@ class Repository:
                  event.city, event.status, payload, event.date_first_seen.isoformat(), now),
             )
             for source in event.source_attributions or [event.source]:
-                self.connection.execute("INSERT OR IGNORE INTO event_sources VALUES (?, ?, ?)", (event.id, source, event.source_event_id))
+                ids = event.source_event_ids.get(source) or ([event.source_event_id] if source == event.source and event.source_event_id else [])
+                for source_id in ids:
+                    self.connection.execute("INSERT OR IGNORE INTO event_sources VALUES (?, ?, ?)", (event.id, source, source_id))
+            self.connection.execute(
+                """INSERT INTO event_normalization_audit VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(event_id) DO UPDATE SET normalized_at=excluded.normalized_at,
+                source_names_json=excluded.source_names_json, source_event_ids_json=excluded.source_event_ids_json,
+                source_urls_json=excluded.source_urls_json, conflicting_fields_json=excluded.conflicting_fields_json,
+                selected_values_json=excluded.selected_values_json, selection_reasons_json=excluded.selection_reasons_json""",
+                (event.id, (event.normalized_at or datetime.now(timezone.utc)).isoformat(), json.dumps(event.source_attributions), json.dumps(event.source_event_ids), json.dumps(event.source_urls), json.dumps(event.conflicting_fields, default=str), json.dumps(event.selected_values, default=str), json.dumps(event.selection_reasons)),
+            )
         self.connection.commit()
 
     def events_between(self, start: datetime, end: datetime) -> list[Event]:
@@ -86,4 +96,3 @@ class Repository:
             self.connection.execute("INSERT INTO recommendations(report_id, event_id, opportunity_score, confidence_score, payload_json, scoring_version) VALUES (?, ?, ?, ?, ?, ?)",
                                     (cursor.lastrowid, item.event.id, item.opportunity_score, item.confidence_score, item.model_dump_json(), "v1-rules"))
         self.connection.commit()
-

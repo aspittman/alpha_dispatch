@@ -1,21 +1,79 @@
-Delta Center:
+delta_center:
+  canonical_name: Delta Center
+  aliases: [Vivint Arena, EnergySolutions Arena]
+  address: 301 S Temple
+  city: Salt Lake City
+  state: UT
+  latitude: 40.7683
+  longitude: -111.9011
   capacity: 18306
-  pickup_difficulty: 0.65
-  parking_limitations: 0.7
-  staging: "Consider legal public areas along the downtown hotel/restaurant corridor, outside the arena congestion zone."
-Rice-Eccles Stadium:
+  venue_type: arena
+  staging:
+    primary_zone: Gateway commercial area
+    secondary_zone: Western downtown hotel corridor
+    avoid_zone: Immediate arena pickup queue
+    transition_zone: Main Street nightlife corridor
+    notes: [Use only legal public waiting areas., Follow platform and venue pickup rules.]
+rice_eccles_stadium:
+  canonical_name: Rice-Eccles Stadium
+  aliases: [Rice Eccles Stadium]
+  address: 451 S 1400 E
+  city: Salt Lake City
+  state: UT
+  latitude: 40.7599
+  longitude: -111.8488
   capacity: 51444
-  pickup_difficulty: 0.85
-  parking_limitations: 0.8
-  staging: "Avoid the stadium traffic perimeter; consider legal commercial areas near, but outside, road closures."
-LaVell Edwards Stadium:
+  venue_type: stadium
+  staging:
+    primary_zone: Foothill commercial corridor
+    avoid_zone: Stadium traffic perimeter and road closures
+    notes: [Use only legal public waiting areas.]
+lavell_edwards_stadium:
+  canonical_name: LaVell Edwards Stadium
+  aliases: [Cougar Stadium]
+  address: 1700 N Canyon Rd
+  city: Provo
+  state: UT
+  latitude: 40.2575
+  longitude: -111.6547
   capacity: 63470
-  pickup_difficulty: 0.9
-  parking_limitations: 0.75
-  staging: "Wait outside the stadium congestion area and allow traffic to begin clearing before approaching."
-Utah Valley Convention Center:
+  venue_type: stadium
+utah_valley_convention_center:
+  canonical_name: Utah Valley Convention Center
+  aliases: [UVCC]
+  address: 220 W Center St
+  city: Provo
+  state: UT
+  latitude: 40.2338
+  longitude: -111.6618
   capacity: 5000
-  pickup_difficulty: 0.35
-  parking_limitations: 0.35
-  staging: "Consider the downtown Provo hotel and restaurant corridor using legal waiting areas."
-
+  venue_type: convention_center
+america_first_field:
+  canonical_name: America First Field
+  aliases: [Rio Tinto Stadium, America First Field]
+  address: 9256 South State Street
+  city: Sandy
+  state: UT
+  latitude: 40.5829
+  longitude: -111.8934
+  capacity: 20213
+  venue_type: stadium
+  staging:
+    primary_zone: State Street commercial corridor
+    avoid_zone: Immediate stadium pickup queue
+    notes: [Use only legal public waiting areas., Follow venue road-closure instructions.]
+utah_first_credit_union_amphitheatre:
+  canonical_name: Utah First Credit Union Amphitheatre
+  aliases: [USANA Amphitheatre, Utah First Amphitheatre]
+  address: 5150 South 6055 West
+  city: West Valley City
+  state: UT
+  latitude: 40.6577
+  longitude: -112.0350
+  capacity: 20000
+  venue_type: amphitheater
+  staging:
+    primary_zone: Legal commercial areas east of the venue congestion perimeter
+    avoid_zone: Immediate amphitheatre queue and temporary road closures
+    transition_zone: West Valley hotel and restaurant corridors
+    notes: [Confirm current venue pickup rules., Use only legal public waiting areas.]

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 from driver_dispatch.models import Event
@@ -22,12 +22,17 @@ class TicketmasterSource(HttpEventSource):
             raise SourceError("TICKETMASTER_API_KEY is not configured")
         events: list[Event] = []
         for location in self.locations:
-            params = {"apikey": self.api_key, "latlong": f"{location.latitude},{location.longitude}", "radius": int(location.radius_miles), "unit": "miles", "startDateTime": start.isoformat(), "endDateTime": end.isoformat(), "size": 200, "sort": "date,asc"}
+            params = {"apikey": self.api_key, "latlong": f"{location.latitude},{location.longitude}", "radius": int(location.radius_miles), "unit": "miles", "startDateTime": self._api_datetime(start), "endDateTime": self._api_datetime(end), "size": 200, "sort": "date,asc"}
             for item in self.get_json(self.url, params).get("_embedded", {}).get("events", []):
                 venue = (item.get("_embedded", {}).get("venues") or [{}])[0]
                 dates = item.get("dates", {})
                 events.append(Event(source=self.name, source_event_id=item.get("id"), name=item.get("name") or "Unknown event", event_type=self._type(item), venue_name=venue.get("name"), venue_address=(venue.get("address") or {}).get("line1"), city=(venue.get("city") or {}).get("name"), state=(venue.get("state") or {}).get("stateCode"), latitude=self._float((venue.get("location") or {}).get("latitude")), longitude=self._float((venue.get("location") or {}).get("longitude")), start_datetime=dates.get("start", {}).get("dateTime"), ticket_status=(dates.get("status") or {}).get("code"), event_url=item.get("url"), status="canceled" if (dates.get("status") or {}).get("code") == "cancelled" else "scheduled", raw_source_data=item))
         return events
+
+    @staticmethod
+    def _api_datetime(value: datetime) -> str:
+        """Format datetimes as the UTC value required by Ticketmaster."""
+        return value.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
     @staticmethod
     def _float(value):
@@ -41,4 +46,3 @@ class TicketmasterSource(HttpEventSource):
         if "comedy" in text: return "comedy"
         if "theatre" in text or "arts" in text: return "theater"
         return "other"
-

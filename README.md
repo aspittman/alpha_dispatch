@@ -6,9 +6,11 @@ Driver Dispatch Intelligence is a standalone, personal decision-support tool for
 
 - Collects Ticketmaster, SeatGeek, manual, and static holiday events with cached HTTP requests, retries, timeouts, and graceful source failure.
 - Normalizes and conservatively deduplicates events while retaining attribution. Borderline matches are left separate for review.
-- Adds known venue capacity, estimated attendance (explicitly low-confidence), and NWS hourly weather when coordinates are available.
+- Applies canonical venue aliases before matching and retains source conflicts for audit.
+- Keeps venue capacity separate from attendance ranges and labels the estimate basis/confidence.
+- Adds NWS hourly weather only for preliminary recommended windows, then rescores for demand and safety separately.
 - Builds category-specific arrival, departure, and secondary windows.
-- Scores opportunity and confidence separately, applies hard safety/configuration rules, resolves conflicts, and caps weekly hours.
+- Scores opportunity and confidence separately, applies validation gates, merges overlapping/adjacent windows, and caps daily/weekly hours.
 - Produces HTML and plain-text weekly reports and logs actual sessions with earnings metrics.
 - Includes inactive extension points for official calendars and future airport data. Airport intelligence, live traffic, machine learning, navigation, and mobile features are intentionally out of scope.
 
@@ -36,7 +38,8 @@ python main.py score-events
 python main.py show-top --limit 5
 python main.py backfill-week 2026-07-13
 python main.py test-sources
-python main.py log-session --start 2026-07-17T18:00:00-06:00 --end 2026-07-18T00:00:00-06:00 --gross 180 --miles 110 --fuel 22 --trips 12 --event "Example concert"+```
+python main.py log-session --start 2026-07-17T18:00:00-06:00 --end 2026-07-18T00:00:00-06:00 --gross 180 --miles 110 --fuel 22 --trips 12 --event "Example concert"
+```
 
 Reports are written to `reports/output/`. The SQLite database defaults to `data/dispatch.db`. Missing API credentials appear as source failures but do not prevent manual/static data from generating a report.
 
@@ -53,7 +56,7 @@ Use `--email` only after configuring SMTP variables and `DISPATCH_EMAIL_TO`. Kee
 
 ## Scoring and safety
 
-All weights are visible in `config/scoring.yaml`; venue assumptions are in `config/venues.yaml`. Attendance inferred from capacity is marked at low confidence. Opportunity is discounted by confidence so incomplete events do not look artificially precise. Severe weather, canceled/postponed events, excessive distance, missing date/location, permitted hours, attendance minimums, and score thresholds can suppress an item.
+All weights are visible in `config/scoring.yaml`; canonical venue and staging data are in `config/venues.yaml`; optional-source states are in `config/feature_statuses.yaml`. Capacity-only attendance is a conservative range at low confidence and is never stored as confirmed attendance. Opportunity and confidence remain independent so upside cannot hide weak data. Severe weather, canceled/postponed events, excessive distance, missing date/location, permitted hours, freshness, and score thresholds can suppress an item.
 
 Staging text is general guidance only. Never park illegally, block traffic, trespass, wait roadside unsafely, enter restricted areas, or violate platform, airport, venue, or local rules. Confirm event times, closures, and current weather before acting.
 

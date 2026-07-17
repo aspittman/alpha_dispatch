@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 from driver_dispatch.models import Event
@@ -26,8 +26,14 @@ class SeatGeekSource(HttpEventSource):
             for item in self.get_json(self.url, params).get("events", []):
                 venue = item.get("venue") or {}
                 taxonomy = " ".join(t.get("name", "") for t in item.get("taxonomies", [])).lower()
-                events.append(Event(source=self.name, source_event_id=str(item.get("id")), name=item.get("title") or "Unknown event", event_type=self._type(taxonomy), venue_name=venue.get("name"), venue_address=venue.get("address"), city=venue.get("city"), state=venue.get("state"), latitude=(venue.get("location") or {}).get("lat"), longitude=(venue.get("location") or {}).get("lon"), start_datetime=item.get("datetime_utc"), estimated_attendance=venue.get("capacity"), venue_capacity=venue.get("capacity"), ticket_status="available" if item.get("stats", {}).get("listing_count") else None, event_url=item.get("url"), raw_source_data=item))
+                events.append(Event(source=self.name, source_event_id=str(item.get("id")), name=item.get("title") or "Unknown event", event_type=self._type(taxonomy), venue_name=venue.get("name"), venue_address=venue.get("address"), city=venue.get("city"), state=venue.get("state"), latitude=(venue.get("location") or {}).get("lat"), longitude=(venue.get("location") or {}).get("lon"), start_datetime=self._utc_datetime(item.get("datetime_utc")), venue_capacity=venue.get("capacity"), ticket_status="available" if item.get("stats", {}).get("listing_count") else None, event_url=item.get("url"), raw_source_data=item))
         return events
+
+    @staticmethod
+    def _utc_datetime(value):
+        if not value: return None
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00")) if isinstance(value, str) else value
+        return parsed.replace(tzinfo=timezone.utc) if parsed.tzinfo is None else parsed.astimezone(timezone.utc)
 
     @staticmethod
     def _type(text):
@@ -36,4 +42,3 @@ class SeatGeekSource(HttpEventSource):
         if "theater" in text: return "theater"
         if "comedy" in text: return "comedy"
         return "other"
-

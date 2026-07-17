@@ -28,14 +28,21 @@ class AppSettings(BaseModel):
     manual_events_file: str = "data/manual_events.yaml"
     maximum_driving_distance_miles: float = 45
     preferred_driving_days: list[str] = Field(default_factory=lambda: ["Friday", "Saturday"])
-    permitted_start_hour: int = 5
-    permitted_end_hour: int = 2
+    permitted_start_hour: int | None = None
+    permitted_end_hour: int | None = None
     maximum_weekly_hours: float = 20
+    maximum_daily_hours: float = 8
     minimum_opportunity_score: float = 35
     minimum_confidence_score: float = 25
     minimum_estimated_attendance: int = 200
     maximum_weather_risk: int = 80
     report_days_ahead: int = 7
+    maximum_review_events: int = 5
+    maximum_source_age_hours: int = 168
+    nearby_radius_miles: float = 3
+    nearby_radius_by_venue_type: dict[str, float] = Field(default_factory=lambda: {"stadium": 5, "arena": 3, "theater": 1.5})
+    nearby_minimum_attendance: int = 500
+    adjacent_window_minutes: int = 30
     email_address: str | None = None
 
 
@@ -45,6 +52,7 @@ class Settings(BaseModel):
     venues: dict[str, dict[str, Any]] = Field(default_factory=dict)
     scoring: dict[str, Any] = Field(default_factory=dict)
     holidays: list[dict[str, Any]] = Field(default_factory=list)
+    feature_statuses: dict[str, str] = Field(default_factory=dict)
 
     def path(self, value: str) -> Path:
         path = Path(value)
@@ -70,5 +78,5 @@ def load_settings() -> Settings:
         venues=_yaml("venues.yaml", {}),
         scoring=_yaml("scoring.yaml", {}),
         holidays=_yaml("holidays.yaml", []),
+        feature_statuses=_yaml("feature_statuses.yaml", {}),
     )
-

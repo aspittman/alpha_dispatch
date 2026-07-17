@@ -5,12 +5,16 @@ report_dir: reports/output
 manual_events_file: data/manual_events.yaml
 maximum_driving_distance_miles: 45
 preferred_driving_days: [Friday, Saturday]
-permitted_start_hour: 5
-permitted_end_hour: 2
 maximum_weekly_hours: 20
+maximum_daily_hours: 8
 minimum_opportunity_score: 35
 minimum_confidence_score: 25
 minimum_estimated_attendance: 200
 maximum_weather_risk: 80
 report_days_ahead: 7
-
+maximum_review_events: 5
+maximum_source_age_hours: 168
+nearby_radius_miles: 3
+nearby_radius_by_venue_type: {stadium: 5, arena: 3, theater: 1.5, convention_center: 3}
+nearby_minimum_attendance: 500
+adjacent_window_minutes: 30

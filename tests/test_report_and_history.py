@@ -12,6 +12,9 @@ def test_report_generation(event, settings, tmp_path):
     html, text = render_reports(date(2026, 7, 16), [opportunity], schedule, [], tmp_path)
     assert "Driver Dispatch Intelligence" in html.read_text()
     assert "Opportunity" in text.read_text()
+    assert "Drive for arrival:" in text.read_text()
+    assert "Where: Delta Center, Salt Lake City, UT" in text.read_text()
+    assert "RECOMMENDED WEEKLY DRIVE PLAN" in text.read_text()
     assert "not affiliated" in text.read_text()
 
 
@@ -19,4 +22,3 @@ def test_session_metrics():
     start = datetime(2026, 7, 1, 18); session = DrivingSession(date=start.date(), start_datetime=start, end_datetime=start + timedelta(hours=4), gross_earnings=120, miles_driven=80, estimated_fuel_cost=20, trips_completed=8)
     assert session.metrics()["gross_per_hour"] == 30
     assert session.metrics()["net_per_mile"] == 1.25
-

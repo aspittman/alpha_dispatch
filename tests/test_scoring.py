@@ -1,4 +1,5 @@
 from driver_dispatch.scoring.opportunity_score import score_event
+from driver_dispatch.config.settings import AppSettings
 
 
 def test_scores_are_separate_and_explainable(event, settings):
@@ -20,3 +21,13 @@ def test_canceled_event_suppressed(event, settings):
     assert result.suppressed
     assert any("canceled" in reason for reason in result.suppression_reasons)
 
+
+def test_driving_hours_are_unrestricted_by_default(event, settings):
+    settings.app = AppSettings(
+        database_path=settings.app.database_path,
+        cache_dir=settings.app.cache_dir,
+        report_dir=settings.app.report_dir,
+        manual_events_file=settings.app.manual_events_file,
+    )
+    result = score_event(event.model_copy(update={"start_datetime": event.start_datetime.replace(hour=2)}), settings)
+    assert not any("driving hours" in reason for reason in result.suppression_reasons)

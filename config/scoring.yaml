@@ -30,5 +30,4 @@ attendance_breakpoints:
   - [5000, 13]
   - [15000, 20]
   - [40000, 25]
-confidence_fields: [name, venue_name, city, start_datetime, estimated_attendance, event_url]
-
+confidence_fields: [name, venue_name, city, start_datetime, estimated_attendance_midpoint, event_url]

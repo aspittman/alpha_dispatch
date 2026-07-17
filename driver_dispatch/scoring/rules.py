@@ -23,11 +23,10 @@ def suppressions(event: Event, settings) -> list[str]:
     if event.weather and event.weather.get("risk", 0) > settings.app.maximum_weather_risk:
         reasons.append("Weather risk exceeds configured safety limit")
     end = estimated_end(event)
-    if end:
+    start, finish = settings.app.permitted_start_hour, settings.app.permitted_end_hour
+    if end and start is not None and finish is not None:
         hour = end.hour
-        start, finish = settings.app.permitted_start_hour, settings.app.permitted_end_hour
         permitted = hour >= start or hour < finish if start > finish else start <= hour < finish
         if not permitted:
             reasons.append("Estimated ending is outside permitted driving hours")
     return reasons
-

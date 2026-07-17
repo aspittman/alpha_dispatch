@@ -4,7 +4,8 @@ from datetime import date, datetime
 from enum import Enum
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
+from zoneinfo import ZoneInfo
 
 
 class EventType(str, Enum):
@@ -27,12 +28,26 @@ class EventType(str, Enum):
     OTHER = "other"
 
 
+class FeatureStatus(str, Enum):
+    NOT_IMPLEMENTED = "not_implemented"
+    NOT_CONFIGURED = "not_configured"
+    SOURCE_FAILED = "source_failed"
+    NO_DATA_FOUND = "no_data_found"
+    DATA_STALE = "data_stale"
+    AVAILABLE = "available"
+
+
 class Event(BaseModel):
     model_config = ConfigDict(use_enum_values=True)
     id: str | None = None
     source: str
     source_event_id: str | None = None
     source_attributions: list[str] = Field(default_factory=list)
+    source_event_ids: dict[str, list[str]] = Field(default_factory=dict)
+    source_urls: list[str] = Field(default_factory=list)
+    fetched_at: datetime | None = None
+    source_last_updated_at: datetime | None = None
+    normalized_at: datetime | None = None
     name: str
     event_type: EventType = EventType.OTHER
     venue_name: str | None = None
@@ -45,8 +60,12 @@ class Event(BaseModel):
     end_datetime: datetime | None = None
     estimated_end_datetime: datetime | None = None
     timezone: str = "America/Denver"
-    estimated_attendance: int | None = None
     venue_capacity: int | None = None
+    estimated_attendance: int | None = None
+    estimated_attendance_low: int | None = None
+    estimated_attendance_high: int | None = None
+    estimated_attendance_midpoint: int | None = None
+    attendance_basis: str = "unknown"
     attendance_confidence: float | None = None
     ticket_status: str | None = None
     outdoor_event: bool | None = None
@@ -55,7 +74,31 @@ class Event(BaseModel):
     date_last_updated: datetime | None = None
     status: str = "scheduled"
     raw_source_data: dict[str, Any] = Field(default_factory=dict)
+    source_values: dict[str, dict[str, Any]] = Field(default_factory=dict)
+    conflicting_fields: dict[str, list[Any]] = Field(default_factory=dict)
+    selected_values: dict[str, Any] = Field(default_factory=dict)
+    selection_reasons: dict[str, str] = Field(default_factory=dict)
+    verification_flags: list[str] = Field(default_factory=list)
+    canonical_venue_id: str | None = None
+    venue_type: str | None = None
+    venue_verified: bool = False
+    staging: dict[str, Any] | None = None
+    duplicate_count: int = 0
+    nearby_events: list[dict[str, Any]] = Field(default_factory=list)
     weather: dict[str, Any] | None = None
+
+    @model_validator(mode="after")
+    def require_aware_datetimes(self):
+        zone = ZoneInfo(self.timezone or "America/Denver")
+        for field in ("start_datetime", "end_datetime", "estimated_end_datetime"):
+            value = getattr(self, field)
+            if value is not None:
+                setattr(self, field, value.replace(tzinfo=zone) if value.tzinfo is None else value)
+        for field in ("date_first_seen", "date_last_updated", "fetched_at", "source_last_updated_at", "normalized_at"):
+            value = getattr(self, field)
+            if value is not None and value.tzinfo is None:
+                setattr(self, field, value.replace(tzinfo=ZoneInfo("UTC")))
+        return self
 
 
 class DemandWindow(BaseModel):
@@ -76,6 +119,8 @@ class ScoredOpportunity(BaseModel):
     staging_guidance: str | None = None
     suppressed: bool = False
     suppression_reasons: list[str] = Field(default_factory=list)
+    review_reasons: list[str] = Field(default_factory=list)
+    score_components: dict[str, float] = Field(default_factory=dict)
 
 
 class DrivingSession(BaseModel):

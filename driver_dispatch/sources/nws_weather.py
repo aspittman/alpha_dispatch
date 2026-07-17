@@ -28,7 +28,10 @@ class NWSWeatherSource(HttpEventSource):
                 return None
             p = matching[0]
             text = p.get("shortForecast", "")
-            return {"temperature": p.get("temperature"), "temperature_unit": p.get("temperatureUnit"), "wind_speed": p.get("windSpeed"), "short_forecast": text, "precipitation_probability": (p.get("probabilityOfPrecipitation") or {}).get("value"), "risk": weather_risk(text, p.get("windSpeed", ""))}
+            alerts_data = self.get_json("https://api.weather.gov/alerts/active", {"point": f"{latitude:.4f},{longitude:.4f}"}, self.headers)
+            alerts = [feature.get("properties", {}).get("headline") for feature in alerts_data.get("features", []) if feature.get("properties", {}).get("headline")]
+            risk = weather_risk(text, p.get("windSpeed", ""))
+            return {"temperature": p.get("temperature"), "temperature_unit": p.get("temperatureUnit"), "wind_speed": p.get("windSpeed"), "short_forecast": text, "precipitation_probability": (p.get("probabilityOfPrecipitation") or {}).get("value"), "risk": risk, "severe_alerts": alerts, "snow_ice_risk": any(word in text.lower() for word in ("snow", "ice", "freezing")), "outdoor_cancellation_risk": "high" if risk >= 75 else "moderate" if risk >= 50 else "low", "forecast_generated_at": forecast.get("properties", {}).get("generatedAt"), "source": "National Weather Service"}
         except (KeyError, ValueError, SourceError) as exc:
             raise SourceError(f"NWS forecast unavailable: {exc}") from exc
 
@@ -40,4 +43,3 @@ def weather_risk(text: str, wind: str = "") -> int:
     if any(word in value for word in ("snow", "heavy rain")): return 55
     if any(word in value for word in ("rain", "showers")): return 25
     return 5
-
