@@ -39,13 +39,28 @@ class TrafficSettings(BaseModel):
     udot_base_url: str = "https://www.udottraffic.utah.gov/api/v2"
     udot_enabled: bool = True
     udot_cache_minutes: int = 5
+    udot_max_calls_per_refresh: int = 2
+    udot_max_calls_per_minute: int = 8
     google_api_key: str | None = None
     google_base_url: str = "https://routes.googleapis.com"
     google_enabled: bool = True
     google_routing_preference: str = "TRAFFIC_AWARE"
     google_cache_minutes: int = 5
-    google_max_daily_requests: int = 50
-    google_max_destinations_per_check: int = 10
+    google_cost_guard_enabled: bool = True
+    google_monthly_free_elements: int | None = Field(default=None, ge=0)
+    google_monthly_safety_percent: float = Field(default=80, ge=0, le=100)
+    google_max_monthly_elements: int | None = Field(default=None, ge=0)
+    google_max_daily_elements: int | None = Field(default=80, ge=0)
+    google_max_elements_per_refresh: int = Field(default=8, ge=1)
+    google_require_free_limit_configuration: bool = True
+    google_allow_force_refresh: bool = True
+    google_force_refresh_cooldown_minutes: int = 5
+    google_disable_at_limit: bool = True
+    google_allow_paid_overage: bool = False
+    google_billing_timezone: str = "America/Denver"
+    google_billing_reset_day: int = Field(default=1, ge=1, le=28)
+    google_origin_rounding_decimals: int = Field(default=3, ge=0, le=6)
+    low_usage_mode: bool = True
     include_distant_zones_by_default: bool = False
     request_timeout_seconds: float = 10
     planned_shift_end: str | None = None
@@ -112,13 +127,28 @@ def load_settings() -> Settings:
         udot_base_url=os.getenv("UDOT_API_BASE_URL", "https://www.udottraffic.utah.gov/api/v2"),
         udot_enabled=os.getenv("UDOT_ENABLED", "true").lower() == "true",
         udot_cache_minutes=int(os.getenv("UDOT_CACHE_MINUTES", "5")),
+        udot_max_calls_per_refresh=int(os.getenv("UDOT_MAX_CALLS_PER_REFRESH", "2")),
+        udot_max_calls_per_minute=int(os.getenv("UDOT_MAX_CALLS_PER_MINUTE", "8")),
         google_api_key=os.getenv("GOOGLE_ROUTES_API_KEY"),
         google_enabled=os.getenv("GOOGLE_ROUTES_ENABLED", "true").lower() == "true",
         google_base_url=os.getenv("GOOGLE_ROUTES_BASE_URL", "https://routes.googleapis.com"),
         google_routing_preference=os.getenv("GOOGLE_ROUTES_ROUTING_PREFERENCE", "TRAFFIC_AWARE"),
         google_cache_minutes=int(os.getenv("GOOGLE_ROUTES_CACHE_MINUTES", "5")),
-        google_max_daily_requests=int(os.getenv("GOOGLE_ROUTES_MAX_DAILY_REQUESTS", "50")),
-        google_max_destinations_per_check=int(os.getenv("GOOGLE_ROUTES_MAX_DESTINATIONS_PER_CHECK", "10")),
+        google_cost_guard_enabled=os.getenv("GOOGLE_ROUTES_COST_GUARD_ENABLED", "true").lower() == "true",
+        google_monthly_free_elements=int(os.environ["GOOGLE_ROUTES_MONTHLY_FREE_ELEMENTS"]) if os.getenv("GOOGLE_ROUTES_MONTHLY_FREE_ELEMENTS") else None,
+        google_monthly_safety_percent=float(os.getenv("GOOGLE_ROUTES_MONTHLY_SAFETY_PERCENT", "80")),
+        google_max_monthly_elements=int(os.environ["GOOGLE_ROUTES_MAX_MONTHLY_ELEMENTS"]) if os.getenv("GOOGLE_ROUTES_MAX_MONTHLY_ELEMENTS") else None,
+        google_max_daily_elements=int(os.environ["GOOGLE_ROUTES_MAX_DAILY_ELEMENTS"]) if os.getenv("GOOGLE_ROUTES_MAX_DAILY_ELEMENTS") else None,
+        google_max_elements_per_refresh=int(os.getenv("GOOGLE_ROUTES_MAX_ELEMENTS_PER_REFRESH", "8")),
+        google_require_free_limit_configuration=os.getenv("GOOGLE_ROUTES_REQUIRE_FREE_LIMIT_CONFIGURATION", "true").lower() == "true",
+        google_allow_force_refresh=os.getenv("GOOGLE_ROUTES_ALLOW_FORCE_REFRESH", "true").lower() == "true",
+        google_force_refresh_cooldown_minutes=int(os.getenv("GOOGLE_ROUTES_FORCE_REFRESH_COOLDOWN_MINUTES", "5")),
+        google_disable_at_limit=os.getenv("GOOGLE_ROUTES_DISABLE_AT_LIMIT", "true").lower() == "true",
+        google_allow_paid_overage=os.getenv("GOOGLE_ROUTES_ALLOW_PAID_OVERAGE", "false").lower() == "true",
+        google_billing_timezone=os.getenv("GOOGLE_ROUTES_BILLING_TIMEZONE", "America/Denver"),
+        google_billing_reset_day=int(os.getenv("GOOGLE_ROUTES_BILLING_RESET_DAY", "1")),
+        google_origin_rounding_decimals=int(os.getenv("GOOGLE_ROUTES_ORIGIN_ROUNDING_DECIMALS", "3")),
+        low_usage_mode=os.getenv("ALPHA_DISPATCH_LOW_USAGE_MODE", "true").lower() == "true",
         include_distant_zones_by_default=os.getenv("INCLUDE_DISTANT_ZONES_BY_DEFAULT", "false").lower() == "true",
         planned_shift_end=os.getenv("PLANNED_SHIFT_END"),
         drift_penalty_increase_last_90_minutes=os.getenv("DRIFT_PENALTY_INCREASE_LAST_90_MINUTES", "true").lower() == "true",

@@ -1,11 +1,12 @@
 from datetime import datetime, timedelta, timezone
-from types import SimpleNamespace
 
 import httpx
 
 from driver_dispatch.adapters.google_routes import FIELD_MASK, GoogleQuotaExceeded, GoogleRoutesAdapter, duration_seconds, severity
 from driver_dispatch.adapters.udot_traffic import UdotTrafficAdapter, normalize_udot
-from driver_dispatch.config.settings import OperatingZone
+from driver_dispatch.config.settings import OperatingZone, TrafficSettings
+from driver_dispatch.api_usage import UsageLedger
+from driver_dispatch.database import Repository
 from driver_dispatch.mobility import classify, relevant_incidents
 from driver_dispatch.models import RouteMetric, TrafficIncident
 from driver_dispatch.traffic_cache import JsonCache
@@ -24,8 +25,13 @@ class Client:
 
 
 def traffic_settings(**overrides):
-    values = dict(udot_api_key="secret", udot_base_url="https://udot.test/api/v2", udot_enabled=True, udot_cache_minutes=5, google_api_key="secret", google_base_url="https://routes.test", google_enabled=True, google_routing_preference="TRAFFIC_AWARE", google_cache_minutes=5, google_max_daily_requests=50, google_max_destinations_per_check=10, request_timeout_seconds=1)
-    values.update(overrides); return SimpleNamespace(**values)
+    values = dict(udot_api_key="secret", udot_base_url="https://udot.test/api/v2", google_api_key="secret", google_base_url="https://routes.test", request_timeout_seconds=1, google_max_monthly_elements=1000)
+    values.update(overrides); return TrafficSettings(**values)
+
+
+def ledger(tmp_path, settings):
+    path=tmp_path / "usage.db"; repo=Repository(path); repo.migrate(); repo.connection.close()
+    return UsageLedger(path, settings)
 
 
 def test_udot_event_alert_and_unix_normalization(tmp_path):
@@ -45,7 +51,7 @@ def test_udot_key_parameter_cache_and_throttle_hook(tmp_path):
 
 def test_google_request_mask_format_parse_and_cache(tmp_path):
     client = Client(post_data=[{"destinationIndex":0,"condition":"ROUTE_EXISTS","distanceMeters":16093.44,"duration":"1200s","staticDuration":"900s"}])
-    adapter = GoogleRoutesAdapter(traffic_settings(), JsonCache(tmp_path), {"clear":{"maximum_delay_minutes":3,"maximum_multiplier":1.1},"minor":{"maximum_delay_minutes":8,"maximum_multiplier":1.25},"moderate":{"maximum_delay_minutes":15,"maximum_multiplier":1.5},"heavy":{"maximum_delay_minutes":30,"maximum_multiplier":2}}, client)
+    cfg=traffic_settings(); adapter = GoogleRoutesAdapter(cfg, JsonCache(tmp_path), {"clear":{"maximum_delay_minutes":3,"maximum_multiplier":1.1},"minor":{"maximum_delay_minutes":8,"maximum_multiplier":1.25},"moderate":{"maximum_delay_minutes":15,"maximum_multiplier":1.5},"heavy":{"maximum_delay_minutes":30,"maximum_multiplier":2}}, client, ledger(tmp_path,cfg))
     result = adapter.matrix((40.2,-111.7), [("lehi",40.39,-111.85)])
     request = client.calls[0][1]
     assert request["json"]["travelMode"] == "DRIVE" and request["json"]["routingPreference"] == "TRAFFIC_AWARE"
@@ -79,7 +85,7 @@ def test_classification_drift_and_late_shift(settings):
 
 
 def test_google_daily_guard(tmp_path):
-    adapter=GoogleRoutesAdapter(traffic_settings(google_max_daily_requests=0), JsonCache(tmp_path), {}, Client(post_data=[]))
+    cfg=traffic_settings(google_max_daily_elements=0); adapter=GoogleRoutesAdapter(cfg, JsonCache(tmp_path), {}, Client(post_data=[]), ledger(tmp_path,cfg))
     try: adapter.matrix((1,2), [("x",3,4)])
     except GoogleQuotaExceeded as exc: assert "daily" in str(exc)
     else: raise AssertionError("quota guard did not stop request")

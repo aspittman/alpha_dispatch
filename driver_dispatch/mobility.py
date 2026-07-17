@@ -4,6 +4,7 @@ import math
 from datetime import datetime, timedelta, timezone
 
 from driver_dispatch.adapters import GoogleRoutesAdapter, UdotTrafficAdapter
+from driver_dispatch.api_usage import UsageLedger
 from driver_dispatch.models import TrafficIncident, ZoneRecommendation
 from driver_dispatch.scoring import score_event
 from driver_dispatch.traffic_cache import JsonCache
@@ -13,6 +14,13 @@ def miles_between(a, b):
     lat1, lon1, lat2, lon2 = map(math.radians, (*a, *b)); dlat = lat2-lat1; dlon = lon2-lon1
     h = math.sin(dlat/2)**2 + math.cos(lat1)*math.cos(lat2)*math.sin(dlon/2)**2
     return 3958.8 * 2 * math.asin(math.sqrt(h))
+
+
+def _safe_error(exc, *secrets):
+    text = str(exc)
+    for secret in secrets:
+        if secret: text = text.replace(secret, "[REDACTED]")
+    return text
 
 
 def relevant_incidents(incidents: list[TrafficIncident], origin, zone, corridors, now=None):
@@ -61,26 +69,35 @@ class MobilityService:
     def __init__(self, settings, repo, google=None, udot=None):
         self.settings, self.repo = settings, repo
         cache = JsonCache(settings.path(settings.app.cache_dir) / "mobility")
+        self.ledger = UsageLedger(settings.path(settings.app.database_path), settings.traffic)
         thresholds = settings.mobility.get("traffic_thresholds") or {"clear":{"maximum_delay_minutes":3,"maximum_multiplier":1.1},"minor":{"maximum_delay_minutes":8,"maximum_multiplier":1.25},"moderate":{"maximum_delay_minutes":15,"maximum_multiplier":1.5},"heavy":{"maximum_delay_minutes":30,"maximum_multiplier":2}}
-        self.google = google or GoogleRoutesAdapter(settings.traffic, cache, thresholds)
-        self.udot = udot or UdotTrafficAdapter(settings.traffic, cache)
+        self.google = google or GoogleRoutesAdapter(settings.traffic, cache, thresholds, ledger=self.ledger)
+        self.udot = udot or UdotTrafficAdapter(settings.traffic, cache, ledger=self.ledger)
 
-    def run(self, mode, origin_zone="orem", latitude=None, longitude=None, include_distant=False):
+    def run(self, mode, origin_zone="orem", latitude=None, longitude=None, include_distant=False, include_northern=False, force=False, confirmed=False, driving=False):
         now = datetime.now(timezone.utc); errors = []
+        self.google.stats = {"api_calls":0,"cache_hits":0,"elements":0}; self.udot.stats = {"api_calls":0,"cache_hits":0}
+        if force and driving: raise ValueError("Force refresh is unavailable while driving; use it only while safely parked")
         if latitude is not None and longitude is not None: origin, origin_name = (latitude, longitude), "current coordinates"
         else:
             zone = self.settings.zones.get(origin_zone)
             if not zone: raise ValueError(f"Unknown current zone: {origin_zone}")
             origin, origin_name = (zone.latitude, zone.longitude), origin_zone
         try: incidents = self.udot.incidents()
-        except Exception as exc: incidents = []; errors.append({"source":"udot", "message":str(exc)})
-        names = list(self.settings.mobility.get("default_destinations", self.settings.zones))
-        if include_distant or self.settings.traffic.include_distant_zones_by_default or origin[0] > 40.5:
-            names += [n for n, z in self.settings.zones.items() if z.priority == "discouraged"]
-        names = list(dict.fromkeys(names))[:self.settings.traffic.google_max_destinations_per_check]
+        except Exception as exc: incidents = []; errors.append({"source":"udot", "message":_safe_error(exc, self.settings.traffic.udot_api_key)})
+        core = [n for n in ("orem","provo","vineyard","lindon","springville","spanish_fork") if n in self.settings.zones]
+        northern = [n for n in ("pleasant_grove","american_fork","lehi","saratoga_springs") if n in self.settings.zones]
+        distant = [n for n in ("draper","sandy","salt_lake_city","west_valley_city") if n in self.settings.zones]
+        names, destination_reasons = list(core), {n:"core local destination" for n in core}
+        near_north = origin[0] >= 40.35
+        if include_northern or near_north or not self.settings.traffic.low_usage_mode:
+            for n in northern: names.append(n); destination_reasons[n] = "explicit northern selection" if include_northern else "origin is in northern Utah County" if near_north else "standard mode configured"
+        if include_distant or (not self.settings.traffic.low_usage_mode and self.settings.traffic.include_distant_zones_by_default) or origin[0] > 40.5:
+            for n in distant: names.append(n); destination_reasons[n] = "explicit distant selection" if include_distant else "origin is near distant zones"
+        names = list(dict.fromkeys(names))[:self.settings.traffic.google_max_elements_per_refresh]
         destinations = [(name, self.settings.zones[name].latitude, self.settings.zones[name].longitude) for name in names]
-        try: routes = self.google.matrix(origin, destinations, mode)
-        except Exception as exc: routes = {}; errors.append({"source":"google", "message":str(exc)})
+        try: routes = self.google.matrix(origin, destinations, mode, force=force, confirmed=confirmed)
+        except Exception as exc: routes = {}; errors.append({"source":"google", "message":_safe_error(exc, self.settings.traffic.google_api_key)})
         recommendations = []
         for name in names:
             zone = self.settings.zones[name]; route = routes.get(name)
@@ -93,7 +110,9 @@ class MobilityService:
         previous = self.repo.latest_traffic_run("live_refresh") if mode == "live_refresh" else None
         changes = self._changes(previous, recommendations)
         event_impacts = self._event_impacts(now, recommendations, origin)
-        result = {"mode":mode,"generated_at":now,"origin_name":origin_name,"origin":{"latitude":origin[0],"longitude":origin[1]},"recommendations":recommendations,"incidents":incidents,"errors":errors,"changes":changes,"event_impacts":event_impacts,"stats":{"google":self.google.stats,"udot":self.udot.stats,"google_remaining":self.google.remaining}}
+        usage = self.ledger.usage()
+        static_distances = {name:self.repo.latest_static_distance(name) for name in names}
+        result = {"mode":mode,"generated_at":now,"origin_name":origin_name,"origin":{"latitude":origin[0],"longitude":origin[1]},"recommendations":recommendations,"incidents":incidents,"errors":errors,"changes":changes,"event_impacts":event_impacts,"destination_reasons":destination_reasons,"selected_destination_count":len(names),"static_distances":static_distances,"stats":{"google":dict(self.google.stats),"udot":dict(self.udot.stats),"google_remaining":self.google.remaining,"usage":usage}}
         self.repo.save_traffic_run(result)
         return result
 

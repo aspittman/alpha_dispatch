@@ -91,13 +91,26 @@ Measured Google/UDOT conditions remain separate from Aaron's configurable parkin
 
 ### UDOT Traffic
 
-Request a developer key from the official UDOT Traffic developer/API page, accept its terms, and place the issued key only in local environment configuration. UDOT's API accepts the developer key as the `key` request parameter. Alpha Dispatch limits this adapter to at most ten calls in a rolling 60-second window.
+Request a developer key from the official UDOT Traffic developer/API page, accept its terms, and place the issued key only in local environment configuration. UDOT's API accepts the developer key as the `key` request parameter. Alpha Dispatch defaults to at most eight calls in a rolling 60-second window and two calls per refresh; both are configurable.
 
 ### Google Maps Platform
 
 In Google Cloud, create a project, enable billing, enable **Routes API**, and create an API key. Billing must be enabled for Routes API requests even when usage remains within a credit or no-cost allowance. Restrict the key to the Routes API and, where Google supports it for the deployment, to the appropriate application environment.
 
-Compute Route Matrix usage is billed by route element: origins multiplied by destinations. Alpha Dispatch uses one origin and at most ten local destinations by default, caches duplicate comparisons, excludes distant zones from normal refreshes, and enforces a local request limit. Confirm current pricing and quota terms in Google's official documentation before enabling production use.
+Compute Route Matrix usage is measured by route element: `origins × destinations`. Alpha Dispatch uses one origin, checks cache first, atomically reserves elements in SQLite, and stops before a projected request exceeds its configured daily or billing-month cap. It never assumes a permanent allowance. Aaron must enter the current no-charge allowance shown in Google Maps Platform pricing/billing documentation or the Cloud Console.
+
+Manual Google Cloud setup:
+
+1. Enable billing for the project.
+2. Enable only the Routes API required by Alpha Dispatch.
+3. Restrict the API key to Routes API.
+4. Apply server/application restrictions appropriate to the deployment.
+5. Open Google Maps Platform quotas.
+6. Lower the relevant Compute Routes and Compute Route Matrix quotas.
+7. Configure quota alerts and Cloud Billing budget alerts.
+8. Confirm Alpha Dispatch's internal monthly/daily limits are lower than those external quotas.
+
+A Google Cloud budget alert is not necessarily a hard spending cutoff. The internal guard plus lowered service quotas are the primary controls. Neither Google Cloud nor Alpha Dispatch can guarantee a $0 bill if pricing/allowances change, another client uses the same project/key, requests already in flight are billed, or external quotas are configured above the intended allowance.
 
 Never commit `.env` or credentials. A suitable local `.env` is:
 
@@ -112,8 +125,19 @@ GOOGLE_ROUTES_ENABLED=true
 GOOGLE_ROUTES_BASE_URL=https://routes.googleapis.com
 GOOGLE_ROUTES_ROUTING_PREFERENCE=TRAFFIC_AWARE
 GOOGLE_ROUTES_CACHE_MINUTES=5
-GOOGLE_ROUTES_MAX_DAILY_REQUESTS=50
-GOOGLE_ROUTES_MAX_DESTINATIONS_PER_CHECK=10
+GOOGLE_ROUTES_COST_GUARD_ENABLED=true
+GOOGLE_ROUTES_MONTHLY_FREE_ELEMENTS=
+GOOGLE_ROUTES_MONTHLY_SAFETY_PERCENT=80
+GOOGLE_ROUTES_MAX_MONTHLY_ELEMENTS=
+GOOGLE_ROUTES_MAX_DAILY_ELEMENTS=80
+GOOGLE_ROUTES_MAX_ELEMENTS_PER_REFRESH=8
+GOOGLE_ROUTES_REQUIRE_FREE_LIMIT_CONFIGURATION=true
+GOOGLE_ROUTES_ALLOW_PAID_OVERAGE=false
+GOOGLE_ROUTES_ALLOW_FORCE_REFRESH=true
+GOOGLE_ROUTES_FORCE_REFRESH_COOLDOWN_MINUTES=5
+GOOGLE_ROUTES_BILLING_TIMEZONE=America/Denver
+GOOGLE_ROUTES_BILLING_RESET_DAY=1
+ALPHA_DISPATCH_LOW_USAGE_MODE=true
 INCLUDE_DISTANT_ZONES_BY_DEFAULT=false
 
 PLANNED_SHIFT_END=
@@ -143,9 +167,10 @@ Use `--include-distant-zones` when a specific high-value northern opportunity wa
 
 ## Cost and freshness protections
 
-- UDOT events and alerts: five-minute cache by default; conservative retries and rolling ten-call throttle.
-- Google matrices: five-minute departure buckets and cache; one origin; configurable per-run destination cap.
-- Persistent daily Google request counter in the mobility cache directory; no request is made after the local limit.
+- UDOT events and alerts: five-minute cache by default, no more than two calls per refresh, and a configurable rolling call throttle. UDOT calls are tracked separately and are not called Google elements.
+- Google matrices: normalized rounded-origin/departure-bucket cache keys; one origin; configurable element cap per refresh.
+- Persistent `api_usage_ledger` records reservations and completed/failed calls. An atomic transaction rejects projected daily/monthly overage before network I/O and survives restarts/multiple processes.
+- Low-usage mode queries six core local zones, avoids distant zones and weekly live Google traffic, enforces at least five minutes of cache, and limits a normal matrix to eight elements.
 - Narrow Google field mask: duration, static duration, distance, indices, and route status only.
 - Cache hit/miss and API-call statistics appear in structured logs/run summaries.
 - Stale traffic is never silently treated as live. If a valid live cache is absent, the zone is `UNAVAILABLE`.
@@ -164,6 +189,10 @@ Traffic history is stored in:
 - `zone_recommendations`
 
 Migration `003_traffic_intelligence.sql` is applied automatically. This history is intended for later comparison with Aaron's own driving sessions; no earnings model is implemented.
+
+Migration `004_api_usage_ledger.sql` adds the persistent usage ledger. Historical billing buckets are retained; a new bucket begins on `GOOGLE_ROUTES_BILLING_RESET_DAY` in `GOOGLE_ROUTES_BILLING_TIMEZONE`.
+
+When a daily or monthly limit blocks Google, valid cached Google data and UDOT continue. Without cached routes, live durations remain unavailable—the system does not fabricate them. Example UDOT-only output is a zone marked with its incident/closure details, `Google live duration: Unavailable`, and an operational recommendation based only on the disclosed UDOT evidence. A failed request after dispatch remains reserved because Google acceptance cannot be proven locally; this conservative choice can under-use the allowance but cannot knowingly overrun it.
 
 ## Tests
 

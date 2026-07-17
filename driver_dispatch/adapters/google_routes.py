@@ -1,19 +1,19 @@
 from __future__ import annotations
 
-import json
 import logging
-from datetime import date, datetime, timezone
+from datetime import datetime, timezone
 
 import httpx
 
 from driver_dispatch.models import RouteMetric
+from driver_dispatch.api_usage import UsageLedger, UsageLimitExceeded, matrix_elements
 from driver_dispatch.traffic_cache import JsonCache
 
 log = logging.getLogger(__name__)
 FIELD_MASK = "originIndex,destinationIndex,status,condition,distanceMeters,duration,staticDuration"
 
 
-class GoogleQuotaExceeded(RuntimeError): pass
+class GoogleQuotaExceeded(UsageLimitExceeded): pass
 
 
 def duration_seconds(value) -> float | None:
@@ -40,43 +40,50 @@ def severity(delay: float | None, multiplier: float | None, thresholds: dict) ->
 
 
 class GoogleRoutesAdapter:
-    def __init__(self, settings, cache: JsonCache, thresholds: dict, client=None):
+    def __init__(self, settings, cache: JsonCache, thresholds: dict, client=None, ledger: UsageLedger | None = None):
         self.settings, self.cache, self.thresholds = settings, cache, thresholds
+        self.ledger = ledger
+        if ledger is None: raise ValueError("GoogleRoutesAdapter requires a persistent UsageLedger")
         self.client = client or httpx.Client(timeout=settings.request_timeout_seconds)
         self.stats = {"api_calls": 0, "cache_hits": 0, "elements": 0}
-        self.counter_path = cache.directory / "google-daily-counter.json"
-
-    def _count(self):
-        today = date.today().isoformat(); data = {"date": today, "requests": 0}
-        try: data = json.loads(self.counter_path.read_text())
-        except (OSError, ValueError): pass
-        if data.get("date") != today: data = {"date": today, "requests": 0}
-        return data
-
     @property
-    def remaining(self): return max(0, self.settings.google_max_daily_requests - self._count()["requests"])
+    def remaining(self):
+        usage = self.ledger.usage(); limit = usage["google_daily_limit"]
+        return max(0, limit - usage["google_today"]) if limit is not None else None
 
-    def _increment(self):
-        data = self._count()
-        if data["requests"] >= self.settings.google_max_daily_requests: raise GoogleQuotaExceeded("local daily Google request limit reached")
-        data["requests"] += 1; self.counter_path.write_text(json.dumps(data), encoding="utf-8")
-
-    def matrix(self, origin: tuple[float, float], destinations: list[tuple[str, float, float]], mode="pre_shift"):
-        destinations = destinations[:self.settings.google_max_destinations_per_check]
-        bucket = datetime.now(timezone.utc).replace(minute=(datetime.now(timezone.utc).minute // 5) * 5, second=0, microsecond=0).isoformat()
-        key = {"origin": origin, "destinations": destinations, "preference": self.settings.google_routing_preference, "bucket": bucket, "mode": mode}
-        cached = self.cache.get("google-matrix", key, self.settings.google_cache_minutes)
-        if cached:
+    def matrix(self, origin: tuple[float, float], destinations: list[tuple[str, float, float]], mode="pre_shift", force=False, confirmed=False, run_id=None):
+        if mode == "weekly": raise GoogleQuotaExceeded("weekly mode does not make live Google traffic requests")
+        if len(destinations) > self.settings.google_max_elements_per_refresh: destinations = destinations[:self.settings.google_max_elements_per_refresh]
+        now = datetime.now(timezone.utc); minutes = max(5 if self.settings.low_usage_mode else 1, self.settings.google_cache_minutes)
+        bucket = now.replace(minute=(now.minute // minutes) * minutes, second=0, microsecond=0).isoformat()
+        rounded = tuple(round(x, self.settings.google_origin_rounding_decimals) for x in origin)
+        key = {"origin_zone": rounded, "destinations": [(n, round(a,4), round(b,4)) for n,a,b in destinations], "travel_mode":"DRIVE", "preference": self.settings.google_routing_preference, "departure_bucket": bucket, "mode": mode}
+        cache_age = max(5, self.settings.google_cache_minutes) if self.settings.low_usage_mode else self.settings.google_cache_minutes
+        cached = self.cache.get("google-matrix", key, cache_age)
+        if cached and not force:
             self.stats["cache_hits"] += len(destinations); return self._parse(cached[0], destinations, origin, cached[1], True)
+        if force:
+            if not self.settings.google_allow_force_refresh: raise GoogleQuotaExceeded("force refresh is disabled")
+            if cached and not confirmed: raise GoogleQuotaExceeded(f"fresh cached result exists; confirm force refresh of {matrix_elements(1, len(destinations))} elements")
+            recent = self.cache.get("google-force-refresh", rounded, self.settings.google_force_refresh_cooldown_minutes)
+            if recent: raise GoogleQuotaExceeded("force-refresh cooldown is active")
         if not self.settings.google_enabled or not self.settings.google_api_key: raise RuntimeError("Google Routes is disabled or GOOGLE_ROUTES_API_KEY is not configured")
-        self._increment()
+        try: reservation = self.ledger.reserve_google(1, len(destinations), run_id=run_id)
+        except UsageLimitExceeded as exc: raise GoogleQuotaExceeded(str(exc)) from exc
         body = {"origins": [{"waypoint": {"location": {"latLng": {"latitude": origin[0], "longitude": origin[1]}}}}], "destinations": [{"waypoint": {"location": {"latLng": {"latitude": lat, "longitude": lon}}}} for _, lat, lon in destinations], "travelMode": "DRIVE", "routingPreference": self.settings.google_routing_preference}
         headers = {"X-Goog-Api-Key": self.settings.google_api_key, "X-Goog-FieldMask": FIELD_MASK, "Content-Type": "application/json"}
         self.stats["api_calls"] += 1; self.stats["elements"] += len(destinations)
-        response = self.client.post(f"{self.settings.google_base_url.rstrip('/')}/distanceMatrix/v2:computeRouteMatrix", json=body, headers=headers)
-        response.raise_for_status(); data = response.json()
-        if not isinstance(data, list): raise ValueError("Google route matrix response must be a list")
+        try:
+            response = self.client.post(f"{self.settings.google_base_url.rstrip('/')}/distanceMatrix/v2:computeRouteMatrix", json=body, headers=headers)
+            response.raise_for_status(); data = response.json()
+            if not isinstance(data, list): raise ValueError("Google route matrix response must be a list")
+        except Exception as exc:
+            # Once dispatch is attempted, acceptance is ambiguous. Count conservatively.
+            self.ledger.finish(reservation, "failed_unknown_billing", type(exc).__name__)
+            raise
+        self.ledger.finish(reservation)
         self.cache.set("google-matrix", key, data)
+        if force: self.cache.set("google-force-refresh", rounded, {"request_id":reservation.request_id})
         return self._parse(data, destinations, origin, 0, False)
 
     def _parse(self, rows, destinations, origin, age, cache_hit):

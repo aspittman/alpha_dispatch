@@ -112,3 +112,9 @@ class Repository:
     def latest_traffic_run(self, mode: str):
         row = self.connection.execute("SELECT payload_json FROM traffic_check_runs WHERE run_mode=? ORDER BY captured_at DESC LIMIT 1", (mode,)).fetchone()
         return json.loads(row[0]) if row else None
+
+    def latest_static_distance(self, zone: str) -> float | None:
+        row = self.connection.execute("SELECT payload_json FROM route_snapshots WHERE zone=? ORDER BY captured_at DESC LIMIT 1", (zone,)).fetchone()
+        if not row: return None
+        try: return json.loads(row[0]).get("distance_miles")
+        except (ValueError, TypeError): return None

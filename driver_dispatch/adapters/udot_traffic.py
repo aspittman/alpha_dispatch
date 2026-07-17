@@ -53,16 +53,17 @@ class UdotTrafficAdapter:
     _lock = threading.Lock()
     _calls: list[float] = []
 
-    def __init__(self, settings, cache: JsonCache, client=None, sleep=time.sleep):
+    def __init__(self, settings, cache: JsonCache, client=None, sleep=time.sleep, ledger=None):
         self.settings, self.cache = settings, cache
         self.client = client or httpx.Client(timeout=settings.request_timeout_seconds)
+        self.ledger = ledger
         self.sleep = sleep
         self.stats = {"api_calls": 0, "cache_hits": 0}
 
     def _throttle(self):
         with self._lock:
             now = time.monotonic(); self._calls[:] = [t for t in self._calls if now - t < 60]
-            if len(self._calls) >= 10:
+            if len(self._calls) >= self.settings.udot_max_calls_per_minute:
                 self.sleep(max(0, 60 - (now - self._calls[0])))
             self._calls.append(time.monotonic())
 
@@ -79,6 +80,7 @@ class UdotTrafficAdapter:
                 response = self.client.get(f"{self.settings.udot_base_url.rstrip('/')}/{endpoint.lstrip('/')}", params={"key": self.settings.udot_api_key})
                 response.raise_for_status(); data = response.json()
                 if not isinstance(data, (list, dict)): raise ValueError("UDOT response must be a list or object")
+                if self.ledger: self.ledger.record_udot()
                 self.cache.set("udot", key, data); return data
             except (httpx.HTTPError, ValueError) as exc:
                 error = exc
@@ -87,9 +89,9 @@ class UdotTrafficAdapter:
 
     def incidents(self) -> list[TrafficIncident]:
         output = []
-        for endpoint, kind in (("get/event", "event"), ("get/alert", "alert")):
+        endpoints = (("get/event", "event"), ("get/alert", "alert"))[:self.settings.udot_max_calls_per_refresh]
+        for endpoint, kind in endpoints:
             data = self._get(endpoint)
             records = data if isinstance(data, list) else data.get("items") or data.get("Events") or data.get("Alerts") or []
             output.extend(normalize_udot(item, kind) for item in records if isinstance(item, dict))
         return output
-
