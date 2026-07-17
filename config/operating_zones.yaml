@@ -1,0 +1,27 @@
+zones:
+  orem: {latitude: 40.2969, longitude: -111.6946, radius_miles: 5, priority: preferred, user_penalty: 0}
+  provo: {latitude: 40.2338, longitude: -111.6585, radius_miles: 5, priority: preferred, user_penalty: 1, parking_difficulty: moderate, stopping_access: acceptable, driving_complexity: familiar}
+  vineyard: {latitude: 40.2970, longitude: -111.7467, radius_miles: 4, priority: preferred}
+  lindon: {latitude: 40.3433, longitude: -111.7208, radius_miles: 4, priority: preferred}
+  springville: {latitude: 40.1652, longitude: -111.6108, radius_miles: 5, priority: acceptable}
+  spanish_fork: {latitude: 40.1149, longitude: -111.6549, radius_miles: 5, priority: acceptable}
+  pleasant_grove: {latitude: 40.3641, longitude: -111.7385, radius_miles: 5, priority: conditional, directional_drift_risk: 2}
+  american_fork: {latitude: 40.3769, longitude: -111.7958, radius_miles: 5, priority: conditional, directional_drift_risk: 5}
+  lehi: {latitude: 40.3916, longitude: -111.8508, radius_miles: 6, priority: conditional, traffic_friction_baseline: 4, directional_drift_risk: 8, user_penalty: 8}
+  saratoga_springs: {latitude: 40.3491, longitude: -111.9047, radius_miles: 6, priority: conditional, directional_drift_risk: 5}
+  draper: {latitude: 40.5247, longitude: -111.8638, radius_miles: 6, priority: discouraged, directional_drift_risk: 12, user_penalty: 10}
+  sandy: {latitude: 40.5649, longitude: -111.8389, radius_miles: 6, priority: discouraged, directional_drift_risk: 16, user_penalty: 12}
+  salt_lake_city: {latitude: 40.7608, longitude: -111.8910, radius_miles: 8, priority: discouraged, directional_drift_risk: 20, user_penalty: 15, parking_difficulty: high, stopping_access: poor, driving_complexity: high}
+  west_valley_city: {latitude: 40.6916, longitude: -112.0011, radius_miles: 8, priority: discouraged, directional_drift_risk: 22, user_penalty: 12, parking_difficulty: moderate, stopping_access: limited, driving_complexity: moderate}
+default_destinations: [orem, provo, vineyard, lindon, springville, spanish_fork, pleasant_grove, american_fork, lehi, saratoga_springs]
+corridors:
+  - {name: I-15 Provo/Orem, aliases: [I-15, Interstate 15], zones: [provo, orem, springville, lindon]}
+  - {name: University Parkway, aliases: [University Parkway, SR-265], zones: [orem, provo, vineyard]}
+  - {name: State Street, aliases: [State Street, US-89], zones: [provo, orem, lindon, pleasant_grove]}
+  - {name: Pioneer Crossing, aliases: [Pioneer Crossing, SR-145], zones: [american_fork, lehi, saratoga_springs]}
+  - {name: Point of the Mountain, aliases: [Point of the Mountain, I-15], zones: [lehi, draper]}
+traffic_thresholds:
+  clear: {maximum_delay_minutes: 3, maximum_multiplier: 1.10}
+  minor: {maximum_delay_minutes: 8, maximum_multiplier: 1.25}
+  moderate: {maximum_delay_minutes: 15, maximum_multiplier: 1.50}
+  heavy: {maximum_delay_minutes: 30, maximum_multiplier: 2.00}

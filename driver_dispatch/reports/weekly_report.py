@@ -36,7 +36,7 @@ def _summary(schedule):
     return {"best_day": best.event.start_datetime.strftime("%A"), "best_window": f"{min(w.start for w in windows):%-I:%M %p}–{max(w.end for w in windows):%-I:%M %p %Z}", "confidence": f"{best.confidence_score}/100"}
 
 
-def render_reports(week_start, opportunities, schedule, errors, output_dir: Path, feature_statuses=None, maximum_review_events=5) -> tuple[Path, Path]:
+def render_reports(week_start, opportunities, schedule, errors, output_dir: Path, feature_statuses=None, maximum_review_events=5, planned_conditions=None) -> tuple[Path, Path]:
     output_dir.mkdir(parents=True, exist_ok=True)
     feature_statuses = feature_statuses or {"airport": "not_implemented", "traffic": "not_configured", "weather": "no_data_found"}
     top = sorted((o for o in opportunities if not o.suppressed), key=lambda o: (o.opportunity_score, o.confidence_score), reverse=True)[:5]
@@ -62,7 +62,7 @@ def render_reports(week_start, opportunities, schedule, errors, output_dir: Path
     lines += ["", "TOP OPPORTUNITIES"]
     for rank, o in enumerate(top, 1):
         event = o.event
-        lines += ["", f"{rank}. {event.name}", f"When: {_fmt(event.start_datetime)}", f"Where: {_location(event)}", f"Opportunity {o.opportunity_score}/100 | Confidence {o.confidence_score}/100", f"Attendance: {event.estimated_attendance_low or 'unknown'}–{event.estimated_attendance_high or 'unknown'} (basis: {event.attendance_basis}; capacity: {event.venue_capacity or 'unknown'})"]
+        lines += ["", f"{rank}. {event.name}", f"When: {_fmt(event.start_datetime)}", f"Where: {_location(event)}", f"Opportunity / event demand score: {o.event_demand_score}/100 | Confidence {o.confidence_score}/100", "Mobility feasibility: Requires a pre-shift traffic check", "Final driver value status: Not determined from weekly demand alone", f"Attendance: {event.estimated_attendance_low or 'unknown'}–{event.estimated_attendance_high or 'unknown'} (basis: {event.attendance_basis}; capacity: {event.venue_capacity or 'unknown'})"]
         lines += [f"Drive for {w.kind}: {w.start:%-I:%M %p}–{w.end:%-I:%M %p %Z}" for w in o.demand_windows]
         lines += [f"Staging: {o.staging_guidance}", *[f"- {reason}" for reason in o.reasons[:6]]]
     if not top: lines.append("No event passed all recommendation gates.")
@@ -73,6 +73,11 @@ def render_reports(week_start, opportunities, schedule, errors, output_dir: Path
         lines.append(f"- {o.event.name}: {w.get('temperature', '?')}°{w.get('temperature_unit', 'F')}, precipitation {w.get('precipitation_probability', 'unknown')}%, wind {w.get('wind_speed', 'unknown')}; demand {o.score_components.get('weather_demand', 0):+g}, safety {o.score_components.get('weather_safety', 0):+g}; {w.get('short_forecast', 'forecast')}")
         lines.append(f"  Severe alerts: {', '.join(w.get('severe_alerts', [])) or 'none'}; snow/ice risk: {w.get('snow_ice_risk', 'unknown')}; outdoor cancellation risk: {w.get('outdoor_cancellation_risk', 'unknown')}; forecast freshness: {w.get('forecast_generated_at', 'not supplied')}")
     if not weather_items: lines.append(STATUS_LABELS.get(feature_statuses.get("weather", "no_data_found"), "No forecast available"))
+    lines += ["", "PLANNED MOBILITY CONDITIONS", "Construction and long-running conditions only; current traffic is not projected across the week."]
+    for incident in (planned_conditions or [])[:20]:
+        timestamp = incident.last_updated or incident.reported_time or incident.start_time
+        lines.append(f"- {incident.category.replace('_', ' ').title()}: {incident.description} | {incident.roadway_name or 'roadway unspecified'} | source timestamp: {timestamp.isoformat() if timestamp else 'not supplied'}")
+    if not planned_conditions: lines.append("No planned UDOT conditions available; verify before driving.")
     lines += ["", "AIRPORT / TRAFFIC / OPTIONAL INTELLIGENCE"]
     for feature in ("airport", "weather", "traffic"):
         lines.append(f"{feature.title()} intelligence: {STATUS_LABELS.get(feature_statuses.get(feature, 'not_configured'), feature_statuses.get(feature, 'Not configured'))}.")

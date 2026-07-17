@@ -37,6 +37,52 @@ class FeatureStatus(str, Enum):
     AVAILABLE = "available"
 
 
+class TrafficIncident(BaseModel):
+    source: str = "udot"
+    source_id: str
+    category: str = "other"
+    roadway_name: str | None = None
+    direction: str | None = None
+    description: str
+    severity: str = "unknown"
+    latitude: float | None = None
+    longitude: float | None = None
+    start_time: datetime | None = None
+    end_time: datetime | None = None
+    reported_time: datetime | None = None
+    last_updated: datetime | None = None
+    active: bool = True
+    planned: bool = False
+    affected_zones: list[str] = Field(default_factory=list)
+    raw_source_reference: dict[str, Any] = Field(default_factory=dict)
+
+
+class RouteMetric(BaseModel):
+    origin_name: str
+    destination_name: str
+    live_duration_minutes: float | None = None
+    static_duration_minutes: float | None = None
+    delay_minutes: float | None = None
+    delay_percentage: float | None = None
+    traffic_multiplier: float | None = None
+    distance_miles: float | None = None
+    average_route_speed: float | None = None
+    data_age_minutes: float = 0
+    traffic_severity: str = "unavailable"
+    polyline: str | None = None
+    fetched_at: datetime
+    cache_hit: bool = False
+
+
+class ZoneRecommendation(BaseModel):
+    zone: str
+    classification: str
+    route: RouteMetric | None = None
+    incidents: list[TrafficIncident] = Field(default_factory=list)
+    reasons: list[str] = Field(default_factory=list)
+    preference_penalty: int = 0
+
+
 class Event(BaseModel):
     model_config = ConfigDict(use_enum_values=True)
     id: str | None = None
@@ -121,6 +167,9 @@ class ScoredOpportunity(BaseModel):
     suppression_reasons: list[str] = Field(default_factory=list)
     review_reasons: list[str] = Field(default_factory=list)
     score_components: dict[str, float] = Field(default_factory=dict)
+    event_demand_score: float | None = None
+    mobility_feasibility: str = "not measured"
+    final_driver_value_status: str = "requires live mobility check"
 
 
 class DrivingSession(BaseModel):

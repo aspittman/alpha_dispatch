@@ -16,6 +16,7 @@ from driver_dispatch.validation import validation_failures
 from driver_dispatch.sources import ManualEventSource, SeatGeekSource, TicketmasterSource
 from driver_dispatch.sources.holidays import HolidaySource
 from driver_dispatch.sources.nws_weather import NWSWeatherSource
+from driver_dispatch.mobility import MobilityService
 
 log = logging.getLogger(__name__)
 
@@ -27,6 +28,7 @@ class DispatchService:
         cache = settings.path(settings.app.cache_dir)
         self.sources = [ManualEventSource(settings.path(settings.app.manual_events_file)), HolidaySource(settings.holidays, ZoneInfo(settings.app.timezone)), TicketmasterSource(cache, settings.locations), SeatGeekSource(cache, settings.locations)]
         self.weather = NWSWeatherSource(cache)
+        self.mobility = MobilityService(settings, self.repo)
 
     def range(self, start=None, days=None):
         zone = ZoneInfo(self.settings.app.timezone)
@@ -91,6 +93,13 @@ class DispatchService:
         feature_statuses = dict(self.settings.feature_statuses)
         if any(error["source"] == "nws" for error in errors): feature_statuses["weather"] = "source_failed"
         elif not any(event.weather for event in events): feature_statuses["weather"] = "no_data_found" if feature_statuses.get("weather") == "available" else feature_statuses.get("weather", "not_configured")
-        paths = render_reports(start.date(), opportunities, schedule, errors, self.settings.path(self.settings.app.report_dir), feature_statuses, self.settings.app.maximum_review_events)
+        planned_conditions = []
+        try:
+            incidents = self.mobility.udot.incidents()
+            planned_conditions = [incident for incident in incidents if incident.planned or incident.category in ("construction", "closure")]
+            feature_statuses["traffic"] = "available"
+        except Exception as exc:
+            errors.append({"source":"udot", "message":str(exc)}); feature_statuses["traffic"] = "not_configured" if not self.settings.traffic.udot_api_key else "source_failed"
+        paths = render_reports(start.date(), opportunities, schedule, errors, self.settings.path(self.settings.app.report_dir), feature_statuses, self.settings.app.maximum_review_events, planned_conditions)
         self.repo.save_report(start.date(), *paths, opportunities)
         return {"events": events, "opportunities": opportunities, "schedule": schedule, "errors": errors, "uncertain_duplicates": uncertain, "paths": paths}

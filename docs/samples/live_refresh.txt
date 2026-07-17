@@ -1,0 +1,18 @@
+ALPHA DISPATCH — LIVE TRAFFIC REFRESH
+Generated: 2026-07-18T02:10:00+00:00
+Current origin: Provo
+
+CHANGES SINCE LAST CHECK
+- Lehi changed from acceptable to avoid.
+- Provo delay improved by 6 minutes.
+- Spanish Fork remains acceptable.
+
+RECOMMENDATION
+Stay in Orem/Provo.
+
+DATA STATUS
+Google Routes: available
+UDOT Traffic: available
+Driver competition: Unknown
+Expected earnings: Unknown
+Expected tips: Unknown

@@ -1,0 +1,33 @@
+ALPHA DISPATCH — PRE-SHIFT CHECK
+Generated: 2026-07-17T23:30:00+00:00
+Current origin: Orem
+
+RECOMMENDATION
+Stay in Orem/Provo.
+
+PREFER
+Provo
+- Travel time: 16 minutes
+- Normal time: 14 minutes
+- Delay: 2 minutes
+- Traffic: clear
+- Relevant incidents: 0
+
+ACCEPTABLE
+Spanish Fork
+- Travel time: 29 minutes
+- Delay: 4 minutes
+- Traffic: minor
+- Relevant incidents: 1 construction condition with limited measured impact
+
+AVOID
+Lehi
+- Travel time: 42 minutes
+- Normal time: 23 minutes
+- Delay: 19 minutes
+- Traffic: heavy
+- User-observed northbound drift preference applies
+
+Driver competition: Unknown
+Expected earnings: Unknown
+Expected tips: Unknown

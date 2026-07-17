@@ -96,3 +96,19 @@ class Repository:
             self.connection.execute("INSERT INTO recommendations(report_id, event_id, opportunity_score, confidence_score, payload_json, scoring_version) VALUES (?, ?, ?, ?, ?, ?)",
                                     (cursor.lastrowid, item.event.id, item.opportunity_score, item.confidence_score, item.model_dump_json(), "v1-rules"))
         self.connection.commit()
+
+    def save_traffic_run(self, result: dict) -> int:
+        payload = json.dumps(result, default=lambda value: value.model_dump(mode="json") if hasattr(value, "model_dump") else value.isoformat())
+        cursor = self.connection.execute("INSERT INTO traffic_check_runs(run_mode, origin_name, captured_at, payload_json) VALUES (?, ?, ?, ?)", (result["mode"], result["origin_name"], result["generated_at"].isoformat(), payload))
+        run_id = cursor.lastrowid
+        for item in result["recommendations"]:
+            data = item.model_dump(mode="json")
+            self.connection.execute("INSERT INTO zone_recommendations(run_id, zone, classification, payload_json) VALUES (?, ?, ?, ?)", (run_id, item.zone, item.classification, json.dumps(data)))
+            if item.route: self.connection.execute("INSERT INTO route_snapshots(run_id, zone, captured_at, payload_json) VALUES (?, ?, ?, ?)", (run_id, item.zone, result["generated_at"].isoformat(), item.route.model_dump_json()))
+        for incident in result["incidents"]:
+            self.connection.execute("INSERT INTO traffic_incidents(source, source_id, last_seen, payload_json) VALUES (?, ?, ?, ?) ON CONFLICT(source, source_id) DO UPDATE SET last_seen=excluded.last_seen, payload_json=excluded.payload_json", (incident.source, incident.source_id, result["generated_at"].isoformat(), incident.model_dump_json()))
+        self.connection.commit(); return int(run_id)
+
+    def latest_traffic_run(self, mode: str):
+        row = self.connection.execute("SELECT payload_json FROM traffic_check_runs WHERE run_mode=? ORDER BY captured_at DESC LIMIT 1", (mode,)).fetchone()
+        return json.loads(row[0]) if row else None
